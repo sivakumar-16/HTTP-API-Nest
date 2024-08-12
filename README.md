@@ -1,9 +1,17 @@
+# festivalData
 
+## project overview
+
+This task is to creare a HTTP API application that lists out music festival data in a particular manner.
+
+## technology used
+
+- node
+- Typescipt
+- NestJs
+- Docker
+- jest
  
-## Description
-
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
-
 ## Installation
 
 ```bash
@@ -32,7 +40,6 @@ $ npm run test
 # test coverage
 $ npm run test:cov
 ```
+## Download link
+[git repo](https://github.com/sivakumar-16/HTTP-API-Nest.git)
 
-## License
-
-Nest is [MIT licensed](LICENSE).
