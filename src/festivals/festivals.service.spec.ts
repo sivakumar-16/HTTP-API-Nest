@@ -1,12 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { FestivalsService } from './festivals.service';
-import { promises as fs } from 'fs';
+import axios from 'axios';
+import { HttpException } from '@nestjs/common';
 
-jest.mock('fs', () => ({
-  promises: {
-    readFile: jest.fn(),
-  },
-}));
+jest.mock('axios');
 
 describe('FestivalsService', () => {
   let service: FestivalsService;
@@ -19,75 +16,75 @@ describe('FestivalsService', () => {
     service = module.get<FestivalsService>(FestivalsService);
   });
 
-  it('should be defined', () => {
-    expect(service).toBeDefined();
+  afterEach(() => {
+    jest.clearAllMocks();
   });
 
-  it('should read and transform festival data correctly', async () => {
-    const mockData = JSON.stringify([
+  it('should return transformed and sorted data when the API call is successful', async () => {
+    const mockApiResponse = [
       {
-        name: 'Small Night In',
+        name: 'Festival A',
         bands: [
-          {
-            name: 'Squint-281',
-            recordLabel: 'Outerscope',
-          },
+          { name: 'Band 1', recordLabel: 'Label 1' },
+          { name: 'Band 2', recordLabel: 'Label 2' },
         ],
       },
       {
-        name: 'Trainerella',
+        name: 'Festival B',
         bands: [
-          {
-            name: 'Wild Antelope',
-            recordLabel: 'Still Bottom Records',
-          },
+          { name: 'Band 3', recordLabel: 'Label 1' },
+          { name: 'Band 4', recordLabel: 'Label 3' },
         ],
       },
-    ]);
+    ];
 
-    (fs.readFile as jest.Mock).mockResolvedValue(mockData);
+    const expectedTransformedData = [
+      {
+        label: 'Label 1',
+        bands: [
+          { name: 'Band 1', festivals: [{ name: 'Festival A' }] },
+          { name: 'Band 3', festivals: [{ name: 'Festival B' }] },
+        ],
+      },
+      {
+        label: 'Label 2',
+        bands: [{ name: 'Band 2', festivals: [{ name: 'Festival A' }] }],
+      },
+      {
+        label: 'Label 3',
+        bands: [{ name: 'Band 4', festivals: [{ name: 'Festival B' }] }],
+      },
+    ];
+
+    (axios.get as jest.Mock).mockResolvedValue({ data: mockApiResponse });
 
     const result = await service.getFestivalsData();
-
-    expect(result).toEqual([
-      {
-        label: 'Outerscope',
-        bands: [
-          {
-            name: 'Squint-281',
-            festivals: [
-              {
-                name: 'Small Night In',
-              },
-            ],
-          },
-        ],
-      },
-      {
-        label: 'Still Bottom Records',
-        bands: [
-          {
-            name: 'Wild Antelope',
-            festivals: [
-              {
-                name: 'Trainerella',
-              },
-            ],
-          },
-        ],
-      },
-    ]);
-
-    // Ensure the data is sorted by label
-    expect(result[0].label).toBe('Outerscope');
-    expect(result[1].label).toBe('Still Bottom Records');
+    expect(result).toEqual(expectedTransformedData);
   });
 
-  it('should throw an exception if reading file fails', async () => {
-    (fs.readFile as jest.Mock).mockRejectedValue(new Error('File not found'));
+  it('should return cached data when the API call fails', async () => {
+    const cachedData = [
+      {
+        label: 'Cached Label',
+        bands: [{ name: 'Cached Band', festivals: [{ name: 'Cached Festival' }] }],
+      },
+    ];
+
+    service['cachedData'] = cachedData; // Directly setting cached data for the test
+
+    (axios.get as jest.Mock).mockRejectedValue({ response: { status: 500 } });
+
+    const result = await service.getFestivalsData();
+    expect(result).toEqual(cachedData);
+  });
+
+  it('should throw an error if both API call fails and no cached data is available', async () => {
+    service['cachedData'] = []; // Ensure no cached data is available
+
+    (axios.get as jest.Mock).mockRejectedValue({ response: { status: 500 } });
 
     await expect(service.getFestivalsData()).rejects.toThrow(
-      'Failed to read or transform festival data from local file',
+      new HttpException('Failed to fetch festival data and no cached data is available', 500),
     );
   });
 });

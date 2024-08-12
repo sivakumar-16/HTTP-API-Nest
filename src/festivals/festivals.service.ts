@@ -1,40 +1,57 @@
 import { Injectable, HttpException } from '@nestjs/common';
-import { promises as fs } from 'fs';
-import * as path from 'path';
+import axios from 'axios';
 
 @Injectable()
 export class FestivalsService {
-  private readonly dataFilePath = path.resolve(__dirname, '../../data.json');
+  private readonly apiUrl =
+    'https://eacp.energyaustralia.com.au/codingtest/api/v1/festivals';
+  private cachedData: any[] = [];
 
   async getFestivalsData(): Promise<any> {
     try {
-      const data = await fs.readFile(this.dataFilePath, 'utf-8');
-      const jsonData = JSON.parse(data);
+      const response = await axios.get(this.apiUrl);
+      const festivals = response.data;
+      const transformedData = this.transformAndSortData(festivals);
 
-      // Transform data to the desired format
-      const transformedData = jsonData.map((festival: any) => {
-        return {
-          label: festival.bands[0]?.recordLabel || 'Unknown Label',
-          bands: festival.bands.map((band: any) => ({
-            name: band.name,
-            festivals: [
-              {
-                name: festival.name,
-              },
-            ],
-          })),
-        };
-      });
-
-      // Sort by the "label" field
-      transformedData.sort((a: any, b: any) => a.label.localeCompare(b.label));
+      this.cachedData = transformedData;
 
       return transformedData;
     } catch (error) {
-      throw new HttpException(
-        'Failed to read or transform festival data from local file',
-        500,
-      );
+      if (this.cachedData.length > 0) {
+        return this.cachedData;
+      } else {
+        throw new HttpException(
+          'Failed to fetch festival data and no cached data is available',
+          error.response?.status || 500,
+        );
+      }
     }
+  }
+
+  private transformAndSortData(festivals: any[]): any[] {
+    const result: any = {};
+
+    festivals.forEach((festival) => {
+      festival.bands.forEach((band: any) => {
+        const recordLabel = band.recordLabel || 'Unknown Label';
+        if (!result[recordLabel]) {
+          result[recordLabel] = [];
+        }
+
+        result[recordLabel].push({
+          name: band.name,
+          festivals: [{ name: festival.name }],
+        });
+      });
+    });
+
+    const sortedData = Object.keys(result)
+      .sort((a, b) => a.localeCompare(b))
+      .map((label) => ({
+        label,
+        bands: result[label],
+      }));
+
+    return sortedData;
   }
 }
